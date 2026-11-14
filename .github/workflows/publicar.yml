@@ -55,6 +55,8 @@ jobs:
         run: |
           choco install pandoc -y --no-progress
           echo "C:\Program Files\Pandoc" >> $env:GITHUB_PATH
+          # La caché de compilación puede traer restos de WiX dentro de target: se instala limpio.
+          if (Test-Path app\target\herramientas) { Remove-Item -Recurse -Force app\target\herramientas }
           dotnet tool install wix --version 5.0.2 --tool-path app\target\herramientas\wix
       - name: Empaquetar (Windows)
         if: runner.os == 'Windows'
