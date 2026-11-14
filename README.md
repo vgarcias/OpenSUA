@@ -20,7 +20,7 @@ Los ejecutables no están firmados. En macOS, la primera vez abre la app con cli
 - `app/` — aplicación (Rust + Slint): `nucleo` (datos y cálculo), `sua` (línea de comandos), `ui` (interfaz). Ver `app/README.md`.
 - `herramientas/` — empaquetado (`empaquetar.ps1` para Windows, `empaquetar.sh` para macOS/Linux) y utilidades.
 - `sua_test_data/` — archivos `.SUA` sintéticos y resultados esperados.
-- `*.csv` — catálogos (UMA, salarios mínimos, INPC, primas, municipios…).
+- `app/crates/nucleo/semilla/` — catálogos CSV que el programa incluye (UMA, salarios mínimos, INPC, primas, municipios…).
 - `prototipo/`, `prototipo-slint/` — prototipos de interfaz.
 
 ## Publicar una versión

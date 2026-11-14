@@ -2,6 +2,9 @@
 # con datos personales (nombres, NSS, CURP, RFC, salarios). No versionar.
 /SUA/
 
+# Catálogos CSV de trabajo (el programa usa sus copias en app/crates/nucleo/semilla/)
+/data/
+
 # Compilación y artefactos generados
 target/
 dist/
