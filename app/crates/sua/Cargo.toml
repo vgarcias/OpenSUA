@@ -1,0 +1,15 @@
+[package]
+name = "sua-cli"
+version.workspace = true
+edition.workspace = true
+description = "Línea de comandos de OpenSUA: diagnóstico, respaldo y lectura de archivos de pago."
+
+[[bin]]
+name = "sua-cli"
+path = "src/main.rs"
+
+[dependencies]
+sua-nucleo = { path = "../nucleo" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

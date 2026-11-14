@@ -1,6 +1,6 @@
 # Carpeta del SUA original y muestras reales: binarios del IMSS y archivos
 # con datos personales (nombres, NSS, CURP, RFC, salarios). No versionar.
-SUA/
+/SUA/
 
 # Compilación y artefactos generados
 target/
