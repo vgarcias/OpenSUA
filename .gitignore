@@ -5,6 +5,10 @@
 # Catálogos CSV de trabajo (el programa usa sus copias en app/crates/nucleo/semilla/)
 /data/
 
+# Prototipos de interfaz (solo locales)
+/prototipo/
+/prototipo-slint/
+
 # Compilación y artefactos generados
 target/
 dist/
