@@ -1,0 +1,49 @@
+OpenSUA
+============
+
+Cómo usarlo
+-----------
+1. Copie la carpeta OpenSUA-Portable completa a donde quiera: el disco, una memoria USB
+   o una carpeta de red. No se instala y no pide permisos de administrador.
+2. Abra sua.exe.
+
+El manual está en Manual.html (ábralo con su navegador).
+
+Todo lo que captura se guarda dentro de esta misma carpeta:
+
+  data\       la base de datos (sua.db) y los respaldos (data\respaldos)
+  reportes\   los PDF que genera
+  archivos\   los TXT que exporta
+  logs\       la bitácora
+  config\     settings.toml; no lo borre: es lo que indica el modo portable
+
+Para llevarse el trabajo a otro equipo, cierre el programa y copie la carpeta entera.
+
+Para actualizar el programa, cierre el programa y sustituya solo sua.exe y
+sua-cli.exe. No toque data\ ni config\.
+
+Si la carpeta no se puede escribir
+----------------------------------
+Si la memoria USB está protegida contra escritura o la carpeta es de solo lectura,
+el programa avisa y le pide elegir otra carpeta para los datos. Ahí crea una carpeta
+llamada SUA-datos. La pregunta se repite cada vez que lo abra; para evitarla, defina
+la variable de entorno SUA_DATOS con la carpeta de datos antes de abrir sua.exe.
+
+Solo una copia a la vez
+-----------------------
+No se pueden abrir dos copias del programa sobre la misma carpeta de datos.
+
+Aviso de Windows al abrirlo
+---------------------------
+El ejecutable no está firmado. Windows puede mostrar «Windows protegió su PC»:
+elija «Más información» y luego «Ejecutar de todas formas».
+
+sua-cli.exe
+-----------
+Herramienta de línea de comandos (diagnóstico, respaldo, lectura de archivos de pago).
+Ejecute «sua-cli» sin argumentos para ver sus opciones.
+
+Importante
+----------
+Este programa no sustituye al SUA oficial del IMSS: no genera el archivo de pago
+ni la línea de captura. Sus cálculos y cédulas son documentos de trabajo.

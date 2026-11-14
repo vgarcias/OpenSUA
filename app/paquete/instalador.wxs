@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Instalador opcional (.msi) de OpenSUA. Lo arma herramientas\empaquetar.ps1 con WiX 5.
+
+  Es por usuario: no pide permisos de administrador. Instala en
+  %LOCALAPPDATA%\Programs\OpenSUA y NO pone el marcador de modo portable, así que
+  el programa trabaja en modo instalado: los datos van a %APPDATA%\SUA y sobreviven a
+  desinstalar y a actualizar.
+
+  UpgradeCode no debe cambiar nunca: es lo que permite que una versión nueva sustituya a la anterior.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="OpenSUA" Manufacturer="OpenSUA" Version="$(var.Version)"
+           UpgradeCode="9C8176DB-F658-40A1-96E5-69BD38615FD9" Scope="perUser" Language="3082" Codepage="1252">
+    <SummaryInformation Description="OpenSUA $(var.Version)" Codepage="1252" />
+    <MajorUpgrade DowngradeErrorMessage="Ya está instalada una versión más nueva de OpenSUA." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="IconoApp" SourceFile="$(var.Icono)" />
+    <Property Id="ARPPRODUCTICON" Value="IconoApp" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="CarpetaProgramas" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="OpenSUA" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!-- En una instalación por usuario la llave de cada componente es un valor del registro del usuario. -->
+    <Component Id="Programa" Directory="INSTALLFOLDER" Guid="D2571FC4-C26F-448D-93B0-D36F8EABA3D6">
+      <RegistryValue Root="HKCU" Key="Software\OpenSUA" Name="Instalado" Type="integer" Value="1" KeyPath="yes" />
+      <File Id="SuaExe" Source="sua.exe" />
+      <File Id="SuaCliExe" Source="sua-cli.exe" />
+      <File Id="Manual" Source="Manual.html" />
+      <File Id="Licencias" Source="LICENCIAS-DE-TERCEROS.txt" />
+      <RemoveFolder Id="QuitarInstall" Directory="INSTALLFOLDER" On="uninstall" />
+      <RemoveFolder Id="QuitarProgramas" Directory="CarpetaProgramas" On="uninstall" />
+    </Component>
+
+    <Component Id="Accesos" Directory="ProgramMenuFolder" Guid="332783F4-2D9C-4A7A-A2D2-D5782CAC0DA5">
+      <RegistryValue Root="HKCU" Key="Software\OpenSUA" Name="Accesos" Type="integer" Value="1" KeyPath="yes" />
+      <Shortcut Id="AccesoPrograma" Name="OpenSUA" Target="[INSTALLFOLDER]sua.exe" WorkingDirectory="INSTALLFOLDER" Icon="IconoApp" />
+      <Shortcut Id="AccesoManual" Name="OpenSUA - Manual" Target="[INSTALLFOLDER]Manual.html" />
+    </Component>
+
+    <Feature Id="Principal" Title="OpenSUA">
+      <ComponentRef Id="Programa" />
+      <ComponentRef Id="Accesos" />
+    </Feature>
+  </Package>
+</Wix>

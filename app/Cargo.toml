@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = ["crates/nucleo", "crates/sua", "crates/ui"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+
+[workspace.dependencies]
+rusqlite = { version = "0.42", features = ["bundled-sqlcipher-vendored-openssl", "backup"] }
+csv = "1"
+argon2 = "0.5"
+password-hash = { version = "0.5", features = ["getrandom"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+rust_decimal = "1"
+thiserror = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = true
+panic = "abort"
+
+# Argon2 sin optimizar tarda segundos por contraseña: se compila optimizado también en las pruebas.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

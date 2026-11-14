@@ -1,0 +1,1752 @@
+import { Button, LineEdit, ComboBox, CheckBox, StandardTableView, VerticalBox, HorizontalBox, ScrollView, ListView, TextEdit, Palette, AboutSlint } from "std-widgets.slint";
+
+component Campo inherits VerticalLayout {
+    in property <string> etiqueta;
+    in-out property <string> valor;
+    in property <bool> habilitado: true;
+    in property <string> ayuda;
+    // Si no está vacío, se muestra bajo el campo mientras se escribe.
+    in property <string> error;
+    // Enter dentro del campo.
+    callback aceptado();
+    spacing: 2px;
+    Text {
+        text: root.etiqueta;
+        font-size: 12px;
+    }
+    LineEdit {
+        min-width: 40px;
+        text <=> root.valor;
+        enabled: root.habilitado;
+        placeholder-text: root.ayuda;
+        accessible-label: root.etiqueta;
+        accepted => { root.aceptado(); }
+    }
+    if root.error != "": Text {
+        text: root.error;
+        font-size: 12px;
+        color: #ff7b72;
+        wrap: word-wrap;
+    }
+}
+
+// Mensaje con icono de estado: 1 correcto, 2 advertencia, 3 error, 4 información; 0 sin icono.
+component Aviso inherits HorizontalLayout {
+    in property <string> text;
+    in property <int> estado;
+    spacing: 6px;
+    if root.estado > 0 && root.text != "": VerticalLayout {
+        alignment: start;
+        Image {
+            width: 16px;
+            height: 16px;
+            source: root.estado == 1 ? @image-url("../recursos/iconos/circle-check.svg") : root.estado == 2 ? @image-url("../recursos/iconos/triangle-alert.svg") : root.estado == 3 ? @image-url("../recursos/iconos/circle-x.svg") : @image-url("../recursos/iconos/info.svg");
+            colorize: root.estado == 1 ? #3fb950 : root.estado == 2 ? #d29922 : root.estado == 3 ? #f85149 : #58a6ff;
+        }
+    }
+    Text {
+        text: root.text;
+        wrap: word-wrap;
+        font-size: 13px;
+        horizontal-stretch: 1;
+    }
+}
+
+// Lista desplegable con su etiqueta encima, como Campo.
+component Lista inherits VerticalLayout {
+    in property <string> etiqueta;
+    in property <[string]> opciones;
+    in-out property <int> indice;
+    spacing: 2px;
+    Text {
+        text: root.etiqueta;
+        font-size: 12px;
+    }
+    ComboBox {
+        min-width: 40px;
+        model: root.opciones;
+        current-index <=> root.indice;
+        accessible-label: root.etiqueta;
+    }
+}
+
+// Título de un grupo de campos dentro de un formulario.
+component Seccion inherits VerticalLayout {
+    in property <string> text;
+    padding-top: 6px;
+    Text {
+        text: root.text;
+        font-size: 13px;
+        font-weight: 600;
+    }
+}
+
+// Opción de un grupo excluyente (menú, familias, vistas). La elegida se marca
+// con un fondo tenue: el color de acento queda para la acción principal.
+component Opcion inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> elegida;
+    in property <bool> a-la-izquierda;
+    // Número del atajo Ctrl+N, si lo tiene.
+    in property <string> atajo;
+    callback clicked();
+    height: 34px;
+    // En el menú ocupa el ancho de la columna; en un grupo horizontal, el de su texto.
+    min-width: root.a-la-izquierda ? 0px : contenido.preferred-width;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: Palette.foreground.with-alpha(root.elegida ? 0.5 : 0.16);
+    background: root.elegida ? Palette.foreground.with-alpha(0.16) : toque.has-hover ? Palette.foreground.with-alpha(0.07) : transparent;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.elegida;
+    accessible-action-default => { root.clicked(); }
+    foco := FocusScope {
+        key-pressed(evento) => {
+            if (evento.text == " " || evento.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    contenido := HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+        alignment: root.a-la-izquierda ? stretch : center;
+        if root.icon.width > 0: VerticalLayout {
+            alignment: center;
+            Image {
+                width: 18px;
+                height: 18px;
+                source: root.icon;
+                colorize: Palette.foreground;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 14px;
+            font-weight: root.elegida ? 600 : 400;
+            vertical-alignment: center;
+            horizontal-stretch: root.a-la-izquierda ? 1 : 0;
+        }
+        if root.atajo != "": Text {
+            text: root.atajo;
+            font-size: 12px;
+            color: Palette.foreground.with-alpha(0.6);
+            vertical-alignment: center;
+        }
+    }
+    toque := TouchArea {
+        clicked => {
+            foco.focus();
+            root.clicked();
+        }
+    }
+    if foco.has-focus: Rectangle {
+        border-radius: 5px;
+        border-width: 2px;
+        border-color: Palette.accent-background;
+    }
+}
+
+// Texto de resultado: una sola familia monoespaciada para cifras en columnas,
+// sin partir renglones, y se puede seleccionar y copiar.
+component Resultado inherits TextEdit {
+    read-only: true;
+    wrap: no-wrap;
+    font-size: 14px;
+    font-family: "Consolas";
+}
+
+// Cifra alineada a la derecha, para columnas de importes.
+component Cifra inherits Text {
+    horizontal-alignment: right;
+    vertical-alignment: center;
+    font-size: 13px;
+}
+
+export struct RubroVista {
+    nombre: string,
+    importe: string,
+}
+
+export struct LineaVista {
+    nombre: string,
+    dias: string,
+    incidencias: string,
+    imss: string,
+    rcv: string,
+    infonavit: string,
+    amortizacion: string,
+    total: string,
+}
+
+export struct RamoVista {
+    concepto: string,
+    patronal: string,
+    obrero: string,
+    total: string,
+    destacado: bool,
+}
+
+// Renglón del detalle por trabajador; también sirve de encabezado y de total.
+component FilaLinea inherits Rectangle {
+    in property <LineaVista> l;
+    in property <bool> fuerte;
+    in property <bool> sombreado;
+    height: 28px;
+    background: root.sombreado ? Palette.foreground.with-alpha(0.04) : transparent;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 20px;
+        spacing: 8px;
+        Text {
+            text: root.l.nombre;
+            horizontal-stretch: 1;
+            min-width: 80px;
+            overflow: elide;
+            vertical-alignment: center;
+            font-size: 13px;
+            font-weight: root.fuerte ? 600 : 400;
+        }
+        Cifra { text: root.l.dias; width: 104px; font-weight: root.fuerte ? 600 : 400; }
+        Cifra { text: root.l.incidencias; width: 92px; font-weight: root.fuerte ? 600 : 400; }
+        Cifra { text: root.l.imss; width: 88px; font-weight: root.fuerte ? 600 : 400; }
+        Cifra { text: root.l.rcv; width: 88px; font-weight: root.fuerte ? 600 : 400; }
+        Cifra { text: root.l.infonavit; width: 124px; font-weight: root.fuerte ? 600 : 400; }
+        Cifra { text: root.l.amortizacion; width: 100px; font-weight: root.fuerte ? 600 : 400; }
+        Cifra { text: root.l.total; width: 100px; font-weight: 600; }
+    }
+}
+
+component FilaRamo inherits Rectangle {
+    in property <RamoVista> r;
+    in property <bool> fuerte;
+    height: 26px;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 20px;
+        spacing: 8px;
+        Text {
+            text: root.r.concepto;
+            horizontal-stretch: 1;
+            min-width: 200px;
+            overflow: elide;
+            vertical-alignment: center;
+            font-size: 13px;
+            font-weight: root.fuerte || root.r.destacado ? 600 : 400;
+        }
+        Cifra { text: root.r.patronal; width: 110px; font-weight: root.fuerte || root.r.destacado ? 600 : 400; }
+        Cifra { text: root.r.obrero; width: 110px; font-weight: root.fuerte || root.r.destacado ? 600 : 400; }
+        Cifra { text: root.r.total; width: 110px; font-weight: root.fuerte || root.r.destacado ? 600 : 400; }
+    }
+}
+
+// Ventana previa a la principal: pide la contraseña de una base cifrada, o
+// propone ponerle una a una base nueva (entonces se escribe dos veces).
+export component VentanaClave inherits Window {
+    title: "OpenSUA";
+    icon: @image-url("../recursos/app.png");
+    preferred-width: 480px;
+    min-width: 420px;
+    // El texto con varios renglones no cuenta para la altura inicial: se fija una que alcance.
+    min-height: root.nueva ? 380px : root.con-usuario ? 260px : 200px;
+    in property <string> titulo;
+    in property <string> explicacion;
+    in property <bool> nueva;
+    // Inicio de sesión: pide además el nombre de usuario.
+    in property <bool> con-usuario;
+    in-out property <string> usuario;
+    in property <bool> puede-restaurar;
+    in property <string> texto-aceptar: "Abrir";
+    in property <string> texto-cancelar: "Salir";
+    in-out property <string> clave;
+    in-out property <string> repetida;
+    in property <string> mensaje;
+    in property <int> estado: 3;
+    callback aceptar();
+    callback restaurar();
+    callback cancelar();
+    VerticalBox {
+        spacing: 8px;
+        Text {
+            text: root.titulo;
+            font-size: 16px;
+        }
+        Text {
+            text: root.explicacion;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+        if root.con-usuario: Text {
+            text: "Usuario";
+            font-size: 12px;
+        }
+        if root.con-usuario: LineEdit {
+            text <=> root.usuario;
+            accessible-label: "Usuario";
+            accepted => { primera.focus(); }
+            init => { self.focus(); }
+        }
+        Text {
+            text: root.nueva ? "Contraseña (al menos 8 caracteres)" : "Contraseña";
+            font-size: 12px;
+        }
+        primera := LineEdit {
+            input-type: InputType.password;
+            text <=> root.clave;
+            accessible-label: "Contraseña";
+            accepted => { root.aceptar(); }
+        }
+        if root.nueva: Text {
+            text: "Repita la contraseña";
+            font-size: 12px;
+        }
+        if root.nueva: LineEdit {
+            input-type: InputType.password;
+            text <=> root.repetida;
+            accessible-label: "Repita la contraseña";
+            accepted => { root.aceptar(); }
+        }
+        if root.mensaje != "": Aviso { text: root.mensaje; estado: root.estado; }
+        Rectangle { vertical-stretch: 1; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 8px;
+            if root.puede-restaurar: Button { icon: @image-url("../recursos/iconos/archive-restore.svg"); colorize-icon: true; text: "Restaurar un respaldo…"; clicked => { root.restaurar(); } }
+            Button { text: root.texto-cancelar; clicked => { root.cancelar(); } }
+            Button { text: root.texto-aceptar; primary: true; clicked => { root.aceptar(); } }
+        }
+    }
+    init => { if (!root.con-usuario) { primera.focus(); } }
+}
+
+export component Principal inherits Window {
+    title: "OpenSUA";
+    preferred-width: 1180px;
+    preferred-height: 740px;
+    // Menos que esto y la lista y el formulario ya no caben juntos.
+    min-width: 1056px;
+    min-height: 600px;
+
+    icon: @image-url("../recursos/app.png");
+
+    in-out property <int> seccion: 0;
+    // Estado de cada mensaje (1 correcto, 2 advertencia, 3 error, 4 información): lo fija el programa.
+    in property <int> estado-patron;
+    in property <int> estado-trabajador;
+    in property <int> estado-movimiento;
+    in property <int> estado-calculo;
+    in property <int> estado-inpc;
+    // Validación mientras se escribe.
+    pure callback fecha-valida(string) -> bool;
+    pure callback periodo-valido(string) -> bool;
+    pure callback nss-valido(string) -> bool;
+    in property <[string]> lista-entidades;
+    pure callback periodo-con-decreto(string) -> bool;
+    // Por qué no se puede eliminar el patrón o el trabajador cargado; vacío si se puede.
+    in property <string> p-bloqueo;
+    in property <string> t-bloqueo;
+    // Trabajador cargado en el formulario, para la franja de contexto.
+    in property <string> ctx-trabajador;
+    callback txt-abrir-carpeta();
+    // Fila cargada en cada formulario, para que la tabla la marque.
+    in-out property <int> p-fila: -1;
+    in-out property <int> t-fila: -1;
+    // Resultado de las operaciones de Sistema, Importar y exportar, y Archivo de pago.
+    in property <string> sistema-mensaje;
+    in property <string> acerca-version;
+    in property <bool> ayuda-al-final;
+    in property <int> estado-sistema;
+    in property <string> txt-mensaje;
+    in property <int> estado-txt;
+    in property <string> pago-mensaje;
+    in property <int> estado-pago;
+    in property <string> pie;
+
+    // --- Patrones
+    in property <[[StandardListViewItem]]> filas-patrones;
+    in property <bool> patron-existente;
+    in property <string> mensaje-patron;
+    in-out property <string> p-reg;
+    in-out property <string> p-rfc;
+    in-out property <string> p-nombre;
+    in-out property <string> p-actividad;
+    in-out property <string> p-domicilio;
+    in-out property <string> p-municipio;
+    in-out property <string> p-cp;
+    // Posición en lista-entidades; 0 = sin elegir.
+    in-out property <int> p-entidad;
+    in-out property <string> p-telefono;
+    in-out property <string> p-zona;
+    in-out property <string> p-delegacion;
+    in-out property <string> p-prima;
+    in-out property <string> p-prima-desde;
+    callback patron-elegido(int);
+    callback patron-nuevo();
+    callback patron-guardar();
+    callback patron-eliminar();
+    in-out property <string> p-anio;
+    callback patron-determinar-prima();
+
+    // --- Trabajadores
+    in property <[string]> lista-patrones;
+    in-out property <int> indice-patron: -1;
+    in property <[[StandardListViewItem]]> filas-trabajadores;
+    in property <bool> trabajador-existente;
+    in property <string> mensaje-trabajador;
+    in-out property <string> t-nss;
+    in-out property <string> t-paterno;
+    in-out property <string> t-materno;
+    in-out property <string> t-nombre;
+    in-out property <string> t-rfc;
+    in-out property <string> t-curp;
+    in-out property <string> t-sdi;
+    in-out property <string> t-alta;
+    // Posiciones en sus listas; 0 = sin elegir.
+    in-out property <int> t-tipo;
+    in-out property <int> t-jornada;
+    in-out property <string> t-credito;
+    callback patron-activo-cambiado(int);
+    callback trabajador-buscar(string);
+    callback trabajador-elegido(int);
+    callback trabajador-nuevo();
+    callback trabajador-guardar();
+    callback trabajador-eliminar();
+    callback trabajadores-pdf();
+    in-out property <string> a-cp;
+    in-out property <string> a-nacimiento;
+    in-out property <string> a-lugar;
+    in-out property <int> a-entidad;
+    in-out property <string> a-umf;
+    in-out property <string> a-ocupacion;
+    in-out property <int> a-sexo;
+    in-out property <int> a-tipo-salario;
+    in-out property <string> a-jornada;
+
+    // --- Movimientos
+    in property <string> m-trabajador: "Elija un trabajador en la pantalla Trabajadores.";
+    in property <bool> m-habilitado;
+    in property <[[StandardListViewItem]]> filas-movimientos;
+    in property <[string]> tipos-movimiento;
+    // Los tipos, por familia: empleo (posiciones 0 a 3 de la lista), incidencias (4 y 5) y crédito (6 a 11).
+    in property <[string]> tipos-empleo;
+    in property <[string]> tipos-incidencia;
+    in property <[string]> tipos-credito;
+    property <int> m-familia: root.m-tipo < 4 ? 0 : root.m-tipo < 6 ? 1 : 2;
+    in-out property <int> m-tipo;
+    in-out property <string> m-fecha;
+    in-out property <string> m-sdi;
+    in-out property <string> m-dias;
+    in-out property <string> m-folio;
+    in-out property <string> m-credito;
+    // Datos médicos de la incapacidad. Ramo: 0 sin capturar, 1 a 3. Riesgo: posición 0 a 2 (códigos 1 a 3).
+    in-out property <int> m-ramo;
+    in-out property <int> m-riesgo;
+    in-out property <int> m-secuela;
+    in-out property <int> m-control;
+    in-out property <string> m-porcentaje;
+    // Posición 0 a 2: porcentaje, cuota fija, factor.
+    in-out property <int> m-tipo-descuento;
+    in-out property <string> m-valor;
+    in-out property <int> m-fila: -1;
+    in property <string> mensaje-movimiento;
+    callback movimientos-abiertos();
+    callback movimiento-registrar();
+    callback movimiento-eliminar();
+
+    // --- Catálogos
+    in property <[string]> catalogos;
+    in-out property <int> indice-catalogo;
+    in property <[TableColumn]> columnas-catalogo;
+    in property <[[StandardListViewItem]]> filas-catalogo;
+    callback catalogo-elegido(string);
+    callback catalogo-buscar(string);
+    in property <bool> catalogo-es-inpc;
+    in-out property <string> i-mes;
+    in-out property <string> i-inpc;
+    in-out property <string> i-tasa;
+    in property <string> mensaje-inpc;
+    callback inpc-guardar();
+
+    // --- Archivo de pago
+    in property <string> pago-resumen: "Abra un archivo de pago .SUA para revisarlo.";
+    in property <bool> pago-importable;
+    callback pago-abrir();
+    callback pago-importar();
+
+    // --- Cálculo
+    in-out property <string> c-periodo;
+    in-out property <string> c-sdi;
+    in-out property <string> c-dias;
+    in-out property <string> c-dias-bim;
+    in-out property <string> c-prima;
+    in-out property <bool> c-decreto;
+    in-out property <string> c-fecha-pago;
+    in property <string> calculo-texto;
+    in property <string> c-patron: "Sin patrón";
+    callback calcular();
+    callback calcular-patron();
+    in property <bool> c-hay-calculo;
+    // Resultado del cálculo de todo el patrón, ya con formato.
+    in property <string> c-total-rotulo: "Total";
+    in property <string> c-total;
+    in property <string> c-resumen;
+    in property <[RubroVista]> c-rubros;
+    in property <[string]> c-avisos;
+    in property <LineaVista> c-cabecera;
+    in property <[LineaVista]> c-lineas;
+    in property <LineaVista> c-linea-total;
+    in property <[RamoVista]> c-ramos;
+    in-out property <int> c-vista;
+    // 0: todo el patrón; 1: un tramo suelto.
+    in-out property <int> c-modo;
+    in property <bool> c-sin-prima;
+    in property <string> c-mensaje;
+    callback calculo-guardar();
+    callback calculo-pdf();
+    callback calculo-ver-guardado();
+    callback movimientos-pdf();
+    callback calculo-abierto();
+
+    // --- Importar y exportar TXT
+    in property <[string]> txt-clases;
+    in-out property <int> txt-clase;
+    in property <string> txt-texto: "Elija la clase de archivo y pulse Importar o Exportar.";
+    callback txt-importar();
+    callback txt-exportar();
+    callback txt-abierto();
+
+    // --- Sistema
+    in property <string> sistema-texto;
+    // Advertencia fija cuando la carpeta de datos está en una carpeta sincronizada (OneDrive, Dropbox…).
+    in property <string> sistema-aviso-carpeta;
+    callback sistema-actualizar();
+    callback sistema-respaldar();
+    callback sistema-compactar();
+    in property <[string]> sistema-respaldos;
+    in-out property <int> sistema-respaldo: -1;
+    callback sistema-restaurar();
+    // Cifrado de la base.
+    in property <bool> sistema-cifrada;
+    in-out property <string> sistema-clave-actual;
+    in-out property <string> sistema-clave-nueva;
+    in-out property <string> sistema-clave-repetida;
+    in property <string> sistema-mensaje-clave;
+    // Poner o cambiar la contraseña; con `true`, quitarla.
+    callback sistema-clave-aplicar(bool);
+    // Respaldos sin cifrar que quedan en una base cifrada.
+    in property <string> sistema-aviso-respaldos;
+    callback sistema-borrar-sin-cifrar();
+    // --- Usuarios y roles. Sin usuarios registrados, todo está permitido.
+    in property <bool> puede-capturar: true;
+    in property <bool> puede-eliminar: true;
+    in property <bool> puede-exportar: true;
+    in property <bool> puede-respaldar: true;
+    in property <bool> puede-administrar: true;
+    in property <bool> sistema-hay-usuarios;
+    // Lista para elegir a quién modificar; la posición 0 es «Usuario nuevo».
+    in property <[string]> sistema-usuarios;
+    in-out property <int> sistema-usuario-indice;
+    callback sistema-usuario-elegido(int);
+    in-out property <string> u-nombre;
+    in-out property <string> u-completo;
+    in-out property <int> u-rol;
+    in-out property <bool> u-activo: true;
+    in-out property <string> u-clave;
+    in-out property <string> u-repetida;
+    in property <string> sistema-mensaje-usuarios;
+    in property <int> estado-usuarios: 3;
+    callback sistema-usuario-guardar();
+    in-out property <string> mi-clave-actual;
+    in-out property <string> mi-clave-nueva;
+    in-out property <string> mi-clave-repetida;
+    in property <string> sistema-mensaje-mi-clave;
+    in property <int> estado-mi-clave: 3;
+    callback sistema-mi-clave();
+    in property <string> sistema-bitacora;
+    in property <bool> sistema-al-final;
+    // Tras un intento fallido se pide la contraseña del respaldo.
+    in property <bool> sistema-pide-clave-respaldo;
+    in-out property <string> sistema-clave-respaldo;
+
+    // Atajos: Ctrl+1 a 8 cambia de pantalla (en el orden del menú), Ctrl+S guarda, Ctrl+N limpia el formulario.
+    function ir-a(seccion: int) {
+        root.seccion = seccion;
+        if (seccion == 6) { root.movimientos-abiertos(); }
+        if (seccion == 5) { root.calculo-abierto(); }
+        if (seccion == 7) { root.txt-abierto(); }
+        if (seccion == 4) { root.sistema-actualizar(); }
+    }
+    FocusScope {
+        key-pressed(evento) => {
+            if (!evento.modifiers.control) {
+                return reject;
+            }
+            if (evento.text == "1") { root.ir-a(0); return accept; }
+            if (evento.text == "2") { root.ir-a(1); return accept; }
+            if (evento.text == "3") { root.ir-a(6); return accept; }
+            if (evento.text == "4") { root.ir-a(5); return accept; }
+            if (evento.text == "5") { root.ir-a(2); return accept; }
+            if (evento.text == "6") { root.ir-a(7); return accept; }
+            if (evento.text == "7") { root.ir-a(3); return accept; }
+            if (evento.text == "8") { root.ir-a(4); return accept; }
+            if (evento.text == "9") { root.ir-a(8); return accept; }
+            if (evento.text == "s" || evento.text == "S") {
+                if (root.seccion == 0) { root.patron-guardar(); return accept; }
+                if (root.seccion == 1) { root.trabajador-guardar(); return accept; }
+                if (root.seccion == 6 && root.m-habilitado) { root.movimiento-registrar(); return accept; }
+                if (root.seccion == 5 && root.c-hay-calculo) { root.calculo-guardar(); return accept; }
+                return reject;
+            }
+            if (evento.text == "n" || evento.text == "N") {
+                if (root.seccion == 0) { root.patron-nuevo(); return accept; }
+                if (root.seccion == 1) { root.trabajador-nuevo(); return accept; }
+                return reject;
+            }
+            return reject;
+        }
+    VerticalLayout {
+        HorizontalLayout {
+            // Navegación
+            Rectangle {
+                width: 204px;
+                background: #00000022;
+                VerticalBox {
+                    alignment: start;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Image {
+                            width: 26px;
+                            height: 26px;
+                            source: @image-url("../recursos/app.svg");
+                        }
+                        Text {
+                            text: "OpenSUA";
+                            font-size: 18px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Opcion {
+                        text: "Patrones";
+                        atajo: "1";
+                        icon: @image-url("../recursos/iconos/building-2.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 0;
+                        clicked => { root.seccion = 0; }
+                    }
+                    Opcion {
+                        text: "Trabajadores";
+                        atajo: "2";
+                        icon: @image-url("../recursos/iconos/users.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 1;
+                        clicked => { root.seccion = 1; }
+                    }
+                    Opcion {
+                        text: "Movimientos";
+                        atajo: "3";
+                        icon: @image-url("../recursos/iconos/arrow-left-right.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 6;
+                        clicked => {
+                            root.seccion = 6;
+                            root.movimientos-abiertos();
+                        }
+                    }
+                    Opcion {
+                        text: "Cálculo";
+                        atajo: "4";
+                        icon: @image-url("../recursos/iconos/calculator.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 5;
+                        clicked => {
+                            root.seccion = 5;
+                            root.calculo-abierto();
+                        }
+                    }
+                    Opcion {
+                        text: "Archivo de pago";
+                        atajo: "5";
+                        icon: @image-url("../recursos/iconos/file-input.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 2;
+                        clicked => { root.seccion = 2; }
+                    }
+                    Opcion {
+                        text: "Importar y exportar";
+                        atajo: "6";
+                        icon: @image-url("../recursos/iconos/arrow-down-up.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 7;
+                        clicked => {
+                            root.seccion = 7;
+                            root.txt-abierto();
+                        }
+                    }
+                    Opcion {
+                        text: "Catálogos";
+                        atajo: "7";
+                        icon: @image-url("../recursos/iconos/book-open.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 3;
+                        clicked => { root.seccion = 3; }
+                    }
+                    Opcion {
+                        text: "Sistema";
+                        atajo: "8";
+                        icon: @image-url("../recursos/iconos/settings.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 4;
+                        clicked => {
+                            root.seccion = 4;
+                            root.sistema-actualizar();
+                        }
+                    }
+                    Opcion {
+                        text: "Ayuda";
+                        atajo: "9";
+                        icon: @image-url("../recursos/iconos/circle-help.svg");
+                        a-la-izquierda: true;
+                        elegida: root.seccion == 8;
+                        clicked => { root.seccion = 8; }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                // Patrón activo: rige Trabajadores, Movimientos, Cálculo e Importar y exportar.
+                if root.seccion != 3 && root.seccion != 4 && root.seccion != 8: Rectangle {
+                    height: 46px;
+                    background: Palette.foreground.with-alpha(0.05);
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 14px;
+                        spacing: 10px;
+                        alignment: start;
+                        Text {
+                            text: "Patrón activo";
+                            vertical-alignment: center;
+                            font-size: 13px;
+                            color: Palette.foreground.with-alpha(0.7);
+                        }
+                        if root.lista-patrones.length > 0: VerticalLayout {
+                            alignment: center;
+                            ComboBox {
+                                min-width: 480px;
+                                model: root.lista-patrones;
+                                current-index <=> root.indice-patron;
+                                selected => { root.patron-activo-cambiado(root.indice-patron); }
+                            }
+                        }
+                        if root.ctx-trabajador != "" && (root.seccion == 1 || root.seccion == 6): Text {
+                            text: "Trabajador";
+                            vertical-alignment: center;
+                            font-size: 13px;
+                            color: Palette.foreground.with-alpha(0.7);
+                        }
+                        if root.ctx-trabajador != "" && (root.seccion == 1 || root.seccion == 6): Text {
+                            text: root.ctx-trabajador;
+                            vertical-alignment: center;
+                            font-size: 14px;
+                            overflow: elide;
+                        }
+                        if root.lista-patrones.length == 0: Text {
+                            text: "Todavía no hay ninguno registrado.";
+                            vertical-alignment: center;
+                            font-size: 13px;
+                        }
+                        if root.lista-patrones.length == 0 && root.seccion != 0: VerticalLayout {
+                            alignment: center;
+                            Button {
+                                icon: @image-url("../recursos/iconos/building-2.svg");
+                                colorize-icon: true;
+                                text: "Registrar un patrón";
+                                clicked => { root.seccion = 0; }
+                            }
+                        }
+                    }
+                }
+
+            // ---------------- Patrones
+            if root.seccion == 0: HorizontalBox {
+                VerticalBox {
+                    padding-left: 0px;
+                    Text {
+                        text: "Patrones";
+                        font-size: 20px;
+                    }
+                    if root.filas-patrones.length == 0: Text {
+                        text: "Todavía no hay patrones. Registre el primero en el formulario de la derecha, o impórtelo en Importar y exportar.";
+                        wrap: word-wrap;
+                    }
+                    StandardTableView {
+                        columns: [
+                            { title: "Registro", min-width: 110px },
+                            { title: "Nombre o razón social", horizontal-stretch: 1, min-width: 170px },
+                            { title: "Trabajadores", min-width: 118px },
+                        ];
+                        rows: root.filas-patrones;
+                        current-row <=> root.p-fila;
+                        current-row-changed(fila) => { root.patron-elegido(fila); }
+                    }
+                }
+                VerticalLayout {
+                    width: 420px;
+                ScrollView {
+                VerticalBox {
+                    width: 400px;
+                    alignment: start;
+                    Text {
+                        text: root.patron-existente ? "Modificar patrón" : "Nuevo patrón";
+                        font-size: 16px;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Registro patronal"; valor <=> root.p-reg; habilitado: !root.patron-existente; ayuda: "11 caracteres"; aceptado => { root.patron-guardar(); } }
+                        Campo { etiqueta: "RFC"; valor <=> root.p-rfc; aceptado => { root.patron-guardar(); } }
+                    }
+                    Campo { etiqueta: "Nombre o razón social"; valor <=> root.p-nombre; aceptado => { root.patron-guardar(); } }
+                    Campo { etiqueta: "Actividad económica"; valor <=> root.p-actividad; aceptado => { root.patron-guardar(); } }
+                    Seccion { text: "Domicilio"; }
+                    Campo { etiqueta: "Domicilio"; valor <=> root.p-domicilio; aceptado => { root.patron-guardar(); } }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Municipio o población"; valor <=> root.p-municipio; horizontal-stretch: 3; aceptado => { root.patron-guardar(); } }
+                        Campo { etiqueta: "C. P."; valor <=> root.p-cp; horizontal-stretch: 1; aceptado => { root.patron-guardar(); } }
+                        Lista { etiqueta: "Entidad"; opciones: root.lista-entidades; indice <=> root.p-entidad; horizontal-stretch: 2; }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Teléfono"; valor <=> root.p-telefono; horizontal-stretch: 2; aceptado => { root.patron-guardar(); } }
+                        Campo { etiqueta: "Área geográf."; valor <=> root.p-zona; horizontal-stretch: 1; aceptado => { root.patron-guardar(); } }
+                        Campo { etiqueta: "Deleg. y subd."; valor <=> root.p-delegacion; horizontal-stretch: 1; ayuda: "4 dígitos"; aceptado => { root.patron-guardar(); } }
+                    }
+                    Seccion { text: "Prima de riesgos de trabajo"; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Prima de RT (%)"; valor <=> root.p-prima; ayuda: "7.58875"; aceptado => { root.patron-guardar(); } }
+                        Campo { etiqueta: "Vigente desde"; valor <=> root.p-prima-desde; ayuda: "AAAA-MM"; aceptado => { root.patron-guardar(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Año a revisar"; valor <=> root.p-anio; ayuda: "2026"; horizontal-stretch: 1; aceptado => { root.patron-determinar-prima(); } }
+                        VerticalLayout {
+                            alignment: end;
+                            horizontal-stretch: 2;
+                            Button { icon: @image-url("../recursos/iconos/calculator.svg"); colorize-icon: true; text: "Determinar prima de RT"; enabled: root.patron-existente; clicked => { root.patron-determinar-prima(); } }
+                        }
+                    }
+                }
+                }
+                // Acciones y resultado, siempre a la vista.
+                VerticalBox {
+                    width: 400px;
+                    alignment: start;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Button { icon: @image-url("../recursos/iconos/save.svg"); colorize-icon: true; text: "Guardar"; primary: true; enabled: root.puede-capturar; clicked => { root.patron-guardar(); } }
+                        Button { icon: @image-url("../recursos/iconos/plus.svg"); colorize-icon: true; text: "Nuevo"; clicked => { root.patron-nuevo(); } }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button { icon: @image-url("../recursos/iconos/trash-2.svg"); colorize-icon: true; text: "Eliminar…"; enabled: root.puede-eliminar && (root.patron-existente && root.p-bloqueo == ""); clicked => { root.patron-eliminar(); } }
+                    }
+                    if root.p-bloqueo != "": Text {
+                        text: root.p-bloqueo;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+                    Aviso { text: root.mensaje-patron; estado: root.estado-patron; }
+                }
+                }
+            }
+
+            // ---------------- Trabajadores
+            if root.seccion == 1: HorizontalBox {
+                VerticalBox {
+                    padding-left: 0px;
+                    Text {
+                        text: "Trabajadores";
+                        font-size: 20px;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        VerticalLayout {
+                            alignment: center;
+                            Image {
+                                width: 18px;
+                                height: 18px;
+                                source: @image-url("../recursos/iconos/search.svg");
+                                colorize: #a0a0a0;
+                            }
+                        }
+                        LineEdit {
+                            placeholder-text: "Buscar por NSS, nombre, RFC o CURP";
+                            edited(texto) => { root.trabajador-buscar(texto); }
+                        }
+                        Button { icon: @image-url("../recursos/iconos/file-down.svg"); colorize-icon: true; text: "Relación en PDF"; clicked => { root.trabajadores-pdf(); } }
+                    }
+                    if root.filas-trabajadores.length == 0: Text {
+                        text: "No hay trabajadores que mostrar. Capture uno en el formulario de la derecha, o impórtelos en Importar y exportar.";
+                        wrap: word-wrap;
+                    }
+                    StandardTableView {
+                        columns: [
+                            { title: "NSS", min-width: 120px },
+                            { title: "Nombre", horizontal-stretch: 1 },
+                            { title: "SDI", min-width: 90px },
+                            { title: "Tipo", min-width: 60px },
+                        ];
+                        rows: root.filas-trabajadores;
+                        current-row <=> root.t-fila;
+                        current-row-changed(fila) => { root.trabajador-elegido(fila); }
+                    }
+                }
+                VerticalLayout {
+                    width: 420px;
+                ScrollView {
+                VerticalBox {
+                    width: 400px;
+                    alignment: start;
+                    Text {
+                        text: root.trabajador-existente ? "Modificar trabajador" : "Nuevo trabajador";
+                        font-size: 16px;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo {
+                            etiqueta: "NSS";
+                            valor <=> root.t-nss;
+                            aceptado => { root.trabajador-guardar(); }
+                            habilitado: !root.trabajador-existente;
+                            ayuda: "11 dígitos";
+                            error: root.trabajador-existente || root.t-nss == "" || root.nss-valido(root.t-nss) ? "" : "Son 11 dígitos; el último es verificador.";
+                        }
+                        Campo { etiqueta: "Salario diario integrado"; valor <=> root.t-sdi; ayuda: "315.04"; aceptado => { root.trabajador-guardar(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Apellido paterno"; valor <=> root.t-paterno; aceptado => { root.trabajador-guardar(); } }
+                        Campo { etiqueta: "Apellido materno"; valor <=> root.t-materno; aceptado => { root.trabajador-guardar(); } }
+                    }
+                    Campo { etiqueta: "Nombre(s)"; valor <=> root.t-nombre; aceptado => { root.trabajador-guardar(); } }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "RFC"; valor <=> root.t-rfc; aceptado => { root.trabajador-guardar(); } }
+                        Campo { etiqueta: "CURP"; valor <=> root.t-curp; aceptado => { root.trabajador-guardar(); } }
+                    }
+                    Seccion { text: "Empleo"; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo {
+                            etiqueta: "Fecha de alta";
+                            valor <=> root.t-alta;
+                            aceptado => { root.trabajador-guardar(); }
+                            ayuda: "AAAA-MM-DD";
+                            error: root.t-alta == "" || root.fecha-valida(root.t-alta) ? "" : "Escriba la fecha como 2026-01-15.";
+                        }
+                        Lista {
+                            etiqueta: "Tipo de trabajador";
+                            opciones: ["Sin elegir", "1 Permanente", "2 Eventual de ciudad", "3 Eventual de la construcción", "4 Eventual del campo"];
+                            indice <=> root.t-tipo;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Lista {
+                            etiqueta: "Semana o jornada reducida";
+                            opciones: ["Sin elegir", "0 Semana completa", "1 Un día", "2 Dos días", "3 Tres días", "4 Cuatro días", "5 Cinco días", "6 Jornada reducida"];
+                            indice <=> root.t-jornada;
+                        }
+                    }
+                    Campo { etiqueta: "Crédito INFONAVIT"; valor <=> root.t-credito; ayuda: "10 dígitos, opcional"; aceptado => { root.trabajador-guardar(); } }
+                    Seccion { text: "Datos afiliatorios (opcionales)"; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo {
+                            etiqueta: "Nacimiento";
+                            valor <=> root.a-nacimiento;
+                            aceptado => { root.trabajador-guardar(); }
+                            ayuda: "AAAA-MM-DD";
+                            horizontal-stretch: 3;
+                            error: root.a-nacimiento == "" || root.fecha-valida(root.a-nacimiento) ? "" : "Como 1990-05-17.";
+                        }
+                        Lista { etiqueta: "Sexo"; opciones: ["Sin elegir", "M Masculino", "F Femenino"]; indice <=> root.a-sexo; horizontal-stretch: 3; }
+                        Campo { etiqueta: "C. P."; valor <=> root.a-cp; horizontal-stretch: 2; aceptado => { root.trabajador-guardar(); } }
+                        Campo { etiqueta: "UMF"; valor <=> root.a-umf; horizontal-stretch: 1; aceptado => { root.trabajador-guardar(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Lugar de nacimiento"; valor <=> root.a-lugar; horizontal-stretch: 4; aceptado => { root.trabajador-guardar(); } }
+                        Lista { etiqueta: "Entidad de nacimiento"; opciones: root.lista-entidades; indice <=> root.a-entidad; horizontal-stretch: 3; }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo { etiqueta: "Ocupación"; valor <=> root.a-ocupacion; horizontal-stretch: 3; aceptado => { root.trabajador-guardar(); } }
+                        Lista { etiqueta: "Tipo de salario"; opciones: ["Sin elegir", "0 Fijo", "1 Variable", "2 Mixto"]; indice <=> root.a-tipo-salario; horizontal-stretch: 2; }
+                        Campo { etiqueta: "Horas"; valor <=> root.a-jornada; ayuda: "1 dígito"; horizontal-stretch: 1; aceptado => { root.trabajador-guardar(); } }
+                    }
+                }
+                }
+                // Acciones y resultado, siempre a la vista.
+                VerticalBox {
+                    width: 400px;
+                    alignment: start;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Button { icon: @image-url("../recursos/iconos/save.svg"); colorize-icon: true; text: "Guardar"; primary: true; enabled: root.puede-capturar; clicked => { root.trabajador-guardar(); } }
+                        Button { icon: @image-url("../recursos/iconos/plus.svg"); colorize-icon: true; text: "Nuevo"; clicked => { root.trabajador-nuevo(); } }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button { icon: @image-url("../recursos/iconos/trash-2.svg"); colorize-icon: true; text: "Eliminar…"; enabled: root.puede-eliminar && (root.trabajador-existente && root.t-bloqueo == ""); clicked => { root.trabajador-eliminar(); } }
+                    }
+                    if root.t-bloqueo != "": Text {
+                        text: root.t-bloqueo;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+                    Aviso { text: root.mensaje-trabajador; estado: root.estado-trabajador; }
+                }
+                }
+            }
+
+            // ---------------- Archivo de pago
+            if root.seccion == 2: VerticalBox {
+                Text {
+                    text: "Archivo de pago";
+                    font-size: 20px;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { icon: @image-url("../recursos/iconos/folder-open.svg"); colorize-icon: true; text: "Abrir archivo .SUA…"; primary: true; clicked => { root.pago-abrir(); } }
+                    Button { icon: @image-url("../recursos/iconos/import.svg"); colorize-icon: true; text: "Importar patrón, trabajadores y movimientos"; enabled: root.puede-capturar && (root.pago-importable); clicked => { root.pago-importar(); } }
+                }
+                if root.pago-mensaje != "": Aviso { text: root.pago-mensaje; estado: root.estado-pago; }
+                Resultado {
+                    text: root.pago-resumen;
+                }
+            }
+
+            // ---------------- Catálogos
+            if root.seccion == 3: VerticalBox {
+                Text {
+                    text: "Catálogos";
+                    font-size: 20px;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    ComboBox {
+                        model: root.catalogos;
+                        current-index <=> root.indice-catalogo;
+                        selected(nombre) => { root.catalogo-elegido(nombre); }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            width: 18px;
+                            height: 18px;
+                            source: @image-url("../recursos/iconos/search.svg");
+                            colorize: #a0a0a0;
+                        }
+                    }
+                    LineEdit {
+                        placeholder-text: "Buscar…";
+                        edited(texto) => { root.catalogo-buscar(texto); }
+                    }
+                }
+                if root.catalogo-es-inpc: HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Campo { etiqueta: "Mes nuevo"; valor <=> root.i-mes; ayuda: "AAAAMM"; min-width: 110px; }
+                    Campo { etiqueta: "INPC"; valor <=> root.i-inpc; ayuda: "143.925"; min-width: 120px; }
+                    Campo { etiqueta: "Recargos del mes (%)"; valor <=> root.i-tasa; ayuda: "2.07"; min-width: 150px; }
+                    VerticalLayout {
+                        alignment: end;
+                        Button { icon: @image-url("../recursos/iconos/save.svg"); colorize-icon: true; text: "Guardar mes"; enabled: root.puede-capturar; clicked => { root.inpc-guardar(); } }
+                    }
+                    VerticalLayout {
+                        alignment: end;
+                        Aviso { text: root.mensaje-inpc; estado: root.estado-inpc; }
+                    }
+                }
+                StandardTableView {
+                    columns: root.columnas-catalogo;
+                    rows: root.filas-catalogo;
+                }
+            }
+
+            // ---------------- Movimientos
+            if root.seccion == 6: HorizontalBox {
+                VerticalBox {
+                    padding-left: 0px;
+                    Text {
+                        text: "Movimientos";
+                        font-size: 20px;
+                    }
+                    Text {
+                        text: root.m-trabajador;
+                        wrap: word-wrap;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Campo {
+                            etiqueta: "Periodo del listado";
+                            valor <=> root.c-periodo;
+                            ayuda: "AAAAMM";
+                            min-width: 120px;
+                            error: root.c-periodo == "" || root.periodo-valido(root.c-periodo) ? "" : "Como 202602.";
+                            aceptado => { root.movimientos-pdf(); }
+                        }
+                        VerticalLayout {
+                            alignment: start;
+                            padding-top: 17px;
+                            Button { icon: @image-url("../recursos/iconos/file-text.svg"); colorize-icon: true; text: "Movimientos de todo el patrón en PDF"; clicked => { root.movimientos-pdf(); } }
+                        }
+                    }
+                    if !root.m-habilitado && root.mensaje-movimiento != "": Aviso { text: root.mensaje-movimiento; estado: root.estado-movimiento; }
+                    if root.m-habilitado && root.filas-movimientos.length == 0: Text {
+                        text: "Este trabajador no tiene movimientos. Sin ellos, el cálculo lo toma como activo desde su fecha de alta, con su salario registrado.";
+                        wrap: word-wrap;
+                    }
+                    StandardTableView {
+                        columns: [
+                            { title: "Fecha", min-width: 120px },
+                            { title: "Movimiento", horizontal-stretch: 1 },
+                            { title: "Salario o días", min-width: 150px },
+                        ];
+                        rows: root.filas-movimientos;
+                        current-row <=> root.m-fila;
+                    }
+                }
+                // Sin trabajador elegido no hay nada que registrar: se dice dónde elegirlo.
+                if !root.m-habilitado: VerticalBox {
+                    width: 400px;
+                    alignment: start;
+                    Text {
+                        text: "Registrar movimiento";
+                        font-size: 16px;
+                    }
+                    Text {
+                        text: "Los movimientos son de un trabajador. Elija uno en la pantalla Trabajadores y vuelva aquí.";
+                        wrap: word-wrap;
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        Button {
+                            icon: @image-url("../recursos/iconos/users.svg");
+                            colorize-icon: true;
+                            text: "Ir a Trabajadores";
+                            primary: true;
+                            clicked => { root.seccion = 1; }
+                        }
+                    }
+                }
+                if root.m-habilitado: VerticalBox {
+                    width: 400px;
+                    alignment: start;
+                    Text {
+                        text: "Registrar movimiento";
+                        font-size: 16px;
+                    }
+                    // Tres familias; debajo, solo los movimientos de la elegida.
+                    HorizontalLayout {
+                        spacing: 6px;
+                        Opcion { text: "Empleo y salario"; elegida: root.m-familia == 0; horizontal-stretch: 1; clicked => { root.m-tipo = 0; } }
+                        Opcion { text: "Ausencias"; elegida: root.m-familia == 1; horizontal-stretch: 1; clicked => { root.m-tipo = 4; } }
+                        Opcion { text: "Crédito"; elegida: root.m-familia == 2; horizontal-stretch: 1; clicked => { root.m-tipo = 6; } }
+                    }
+                    if root.m-familia == 0: ComboBox {
+                        model: root.tipos-empleo;
+                        current-index: root.m-tipo;
+                        selected => { root.m-tipo = self.current-index; }
+                    }
+                    if root.m-familia == 1: ComboBox {
+                        model: root.tipos-incidencia;
+                        current-index: root.m-tipo - 4;
+                        selected => { root.m-tipo = 4 + self.current-index; }
+                    }
+                    if root.m-familia == 2: ComboBox {
+                        model: root.tipos-credito;
+                        current-index: root.m-tipo - 6;
+                        selected => { root.m-tipo = 6 + self.current-index; }
+                    }
+                    // Solo los datos que lleva el movimiento elegido.
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Campo {
+                            etiqueta: "Fecha";
+                            valor <=> root.m-fecha;
+                            ayuda: "AAAA-MM-DD";
+                            error: root.m-fecha == "" || root.fecha-valida(root.m-fecha) ? "" : "Escriba la fecha como 2026-01-15.";
+                            aceptado => { root.movimiento-registrar(); }
+                        }
+                        if root.m-tipo == 0 || root.m-tipo == 2 || root.m-tipo == 3: Campo { etiqueta: "Salario diario integrado"; valor <=> root.m-sdi; ayuda: "315.04"; aceptado => { root.movimiento-registrar(); } }
+                        if root.m-familia == 1: Campo { etiqueta: "Días, desde la fecha"; valor <=> root.m-dias; ayuda: root.m-tipo == 4 ? "1 a 7" : "1 a 99"; aceptado => { root.movimiento-registrar(); } }
+                    }
+                    if root.m-tipo == 1: Text {
+                        text: "La baja no lleva salario. El día de la baja todavía se cotiza.";
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+                    if root.m-tipo == 4: Text {
+                        text: "Hasta 7 días de ausentismo por mes, sin pasar al mes siguiente.";
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+                    if root.m-tipo == 5: Campo { etiqueta: "Folio del certificado"; valor <=> root.m-folio; ayuda: "AB123456"; }
+                    if root.m-tipo == 5: Lista {
+                        etiqueta: "Ramo de seguro (opcional; sirve para la prima de riesgos de trabajo)";
+                        opciones: ["Sin capturar", "1 Riesgos de trabajo", "2 Enfermedad general", "3 Maternidad"];
+                        indice <=> root.m-ramo;
+                    }
+                    if root.m-tipo == 5 && root.m-ramo == 1: HorizontalLayout {
+                        spacing: 8px;
+                        Lista {
+                            etiqueta: "Tipo de riesgo";
+                            horizontal-stretch: 3;
+                            opciones: ["1 Accidente de trabajo", "2 Accidente en trayecto", "3 Enfermedad profesional"];
+                            indice <=> root.m-riesgo;
+                        }
+                        Campo { etiqueta: "% permanente"; valor <=> root.m-porcentaje; ayuda: "0 a 100"; horizontal-stretch: 1; }
+                    }
+                    if root.m-tipo == 5 && root.m-ramo > 0: HorizontalLayout {
+                        spacing: 8px;
+                        Lista {
+                            etiqueta: "Secuela o consecuencia";
+                            opciones: ["0 Ninguna", "1 Incapacidad temporal", "2 Valuación inicial provisional", "3 Valuación inicial definitiva", "4 Defunción", "5 Recaída", "6 Valuación posterior al alta", "7 Revaluación provisional", "8 Recaída sin alta médica", "9 Revaluación definitiva"];
+                            indice <=> root.m-secuela;
+                        }
+                        Lista {
+                            etiqueta: "Control";
+                            opciones: ["0 Ninguna", "1 Única", "2 Inicial", "3 Subsecuente", "4 Alta médica o ST-2", "5 Valuación o ST-3", "6 Defunción o ST-3", "7 Prenatal", "8 Enlace", "9 Postnatal"];
+                            indice <=> root.m-control;
+                        }
+                    }
+                    if root.m-tipo == 6 || root.m-tipo == 11: Campo { etiqueta: "Número de crédito"; valor <=> root.m-credito; ayuda: "10 dígitos"; }
+                    if root.m-tipo == 6 || root.m-tipo == 9 || root.m-tipo == 10: HorizontalLayout {
+                        spacing: 8px;
+                        if root.m-tipo != 10: Lista {
+                            etiqueta: "Tipo de descuento";
+                            horizontal-stretch: 3;
+                            opciones: ["1 Porcentaje del salario", "2 Cuota fija mensual", "3 Factor de descuento"];
+                            indice <=> root.m-tipo-descuento;
+                        }
+                        Campo {
+                            etiqueta: root.m-tipo == 10 ? "Valor nuevo del descuento" : root.m-tipo-descuento == 0 ? "Porcentaje" : root.m-tipo-descuento == 1 ? "Pesos al mes" : "Factor";
+                            valor <=> root.m-valor;
+                            ayuda: root.m-tipo == 10 ? "25, 1500.00 o 28.5320" : root.m-tipo-descuento == 0 ? "25" : root.m-tipo-descuento == 1 ? "1500.00" : "28.5320";
+                            horizontal-stretch: 2;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Button { icon: @image-url("../recursos/iconos/calendar-plus.svg"); colorize-icon: true; text: "Registrar"; primary: true; enabled: root.puede-capturar; clicked => { root.movimiento-registrar(); } }
+                        Button { icon: @image-url("../recursos/iconos/trash-2.svg"); colorize-icon: true; text: "Eliminar el seleccionado…"; enabled: root.puede-capturar && (root.m-fila >= 0); clicked => { root.movimiento-eliminar(); } }
+                    }
+                    Aviso { text: root.mensaje-movimiento; estado: root.estado-movimiento; }
+                }
+            }
+
+            // ---------------- Cálculo
+            if root.seccion == 5: VerticalBox {
+                Text {
+                    text: "Cálculo";
+                    font-size: 20px;
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    Opcion { text: "Todo el patrón"; elegida: root.c-modo == 0; clicked => { root.c-modo = 0; } }
+                    Opcion { text: "Un tramo suelto"; elegida: root.c-modo == 1; clicked => { root.c-modo = 1; } }
+                }
+                // Todo el patrón: periodo y, si se paga tarde, fecha de pago.
+                if root.c-modo == 0: HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Campo {
+                        etiqueta: "Periodo";
+                        valor <=> root.c-periodo;
+                        ayuda: "AAAAMM";
+                        min-width: 110px;
+                        error: root.c-periodo == "" || root.periodo-valido(root.c-periodo) ? "" : "Como 202602.";
+                        aceptado => { root.calcular-patron(); }
+                    }
+                    Campo {
+                        etiqueta: "Fecha de pago (solo si es extemporáneo)";
+                        valor <=> root.c-fecha-pago;
+                        ayuda: "AAAA-MM-DD";
+                        min-width: 250px;
+                        error: root.c-fecha-pago == "" || root.fecha-valida(root.c-fecha-pago) ? "" : "Escriba la fecha como 2026-03-20.";
+                        aceptado => { root.calcular-patron(); }
+                    }
+                    VerticalLayout {
+                        alignment: start;
+                        padding-top: 17px;
+                        Button { icon: @image-url("../recursos/iconos/calculator.svg"); colorize-icon: true; text: "Calcular todo el patrón"; primary: true; clicked => { root.calcular-patron(); } }
+                    }
+                    VerticalLayout {
+                        alignment: start;
+                        padding-top: 17px;
+                        Button { icon: @image-url("../recursos/iconos/history.svg"); colorize-icon: true; text: "Ver guardado"; clicked => { root.calculo-ver-guardado(); } }
+                    }
+                }
+                if root.c-modo == 0: Text {
+                    text: "Usa los movimientos registrados del patrón activo. Con una fecha de pago posterior al vencimiento añade actualización y recargos.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                // Un tramo suelto: una calculadora para comprobar un salario y unos días; no se guarda.
+                if root.c-modo == 1: HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Campo {
+                        etiqueta: "Periodo";
+                        valor <=> root.c-periodo;
+                        ayuda: "AAAAMM";
+                        min-width: 100px;
+                        error: root.c-periodo == "" || root.periodo-valido(root.c-periodo) ? "" : "Como 202602.";
+                        aceptado => { root.calcular(); }
+                    }
+                    Campo { etiqueta: "Salario diario integrado"; valor <=> root.c-sdi; ayuda: "Ej.: 315.04"; min-width: 160px; aceptado => { root.calcular(); } }
+                    Campo { etiqueta: "Días del mes"; valor <=> root.c-dias; min-width: 96px; aceptado => { root.calcular(); } }
+                    Campo { etiqueta: "Días del bimestre"; valor <=> root.c-dias-bim; min-width: 116px; aceptado => { root.calcular(); } }
+                    Campo { etiqueta: "Prima de RT (%)"; valor <=> root.c-prima; ayuda: "Ej.: 7.58875"; min-width: 120px; aceptado => { root.calcular(); } }
+                    VerticalLayout {
+                        alignment: start;
+                        padding-top: 17px;
+                        Button { icon: @image-url("../recursos/iconos/equal.svg"); colorize-icon: true; text: "Calcular el tramo"; primary: true; clicked => { root.calcular(); } }
+                    }
+                }
+                if root.c-modo == 1: Text {
+                    text: "Calcula las cuotas de un salario y unos días, sin usar los movimientos. Sirve para comprobar; no se guarda ni lleva cédula.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                // El decreto de exención solo existió en 2008 y 2009.
+                if root.periodo-con-decreto(root.c-periodo): CheckBox { text: "Aplicar el decreto de exención parcial de cuotas patronales (opcional para el patrón)"; checked <=> root.c-decreto; }
+                if root.c-mensaje != "": Aviso { text: root.c-mensaje; estado: root.estado-calculo; }
+                // Un tramo suelto, un error o la lista de guardados: texto que se puede seleccionar.
+                if !root.c-hay-calculo && root.calculo-texto != "": Resultado {
+                    text: root.calculo-texto;
+                }
+                if !root.c-hay-calculo && root.calculo-texto == "": Rectangle { }
+                // Todo el patrón: primero el total y los rubros, luego los avisos y el detalle.
+                if root.c-hay-calculo: VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 32px;
+                        alignment: start;
+                        VerticalLayout {
+                            spacing: 2px;
+                            Text {
+                                text: root.c-total-rotulo;
+                                font-size: 12px;
+                                color: Palette.foreground.with-alpha(0.7);
+                            }
+                            Text {
+                                text: root.c-total;
+                                font-size: 26px;
+                                font-weight: 600;
+                            }
+                        }
+                        for rubro in root.c-rubros: VerticalLayout {
+                            alignment: end;
+                            spacing: 2px;
+                            Text {
+                                text: rubro.nombre;
+                                font-size: 12px;
+                                color: Palette.foreground.with-alpha(0.7);
+                            }
+                            Text {
+                                text: rubro.importe;
+                                font-size: 16px;
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.c-resumen;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+                    for aviso in root.c-avisos: Aviso { text: aviso; estado: 2; }
+                    if root.c-sin-prima: HorizontalLayout {
+                        alignment: start;
+                        Button { icon: @image-url("../recursos/iconos/building-2.svg"); colorize-icon: true; text: "Registrar la prima en Patrones"; clicked => { root.seccion = 0; } }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Button { icon: @image-url("../recursos/iconos/save.svg"); colorize-icon: true; text: "Guardar cálculo"; enabled: root.puede-capturar; clicked => { root.calculo-guardar(); } }
+                        Button { icon: @image-url("../recursos/iconos/file-down.svg"); colorize-icon: true; text: "Cédula en PDF"; clicked => { root.calculo-pdf(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Opcion { text: "Por trabajador"; elegida: root.c-vista == 0; clicked => { root.c-vista = 0; } }
+                        Opcion { text: "Por ramo"; elegida: root.c-vista == 1; clicked => { root.c-vista = 1; } }
+                        Opcion { text: "Texto para copiar"; elegida: root.c-vista == 2; clicked => { root.c-vista = 2; } }
+                    }
+                    if root.c-vista == 0: VerticalLayout {
+                        FilaLinea { l: root.c-cabecera; fuerte: true; }
+                        Rectangle { height: 1px; background: Palette.foreground.with-alpha(0.25); }
+                        ListView {
+                            for linea[i] in root.c-lineas: FilaLinea { l: linea; sombreado: Math.mod(i, 2) == 1; }
+                        }
+                        Rectangle { height: 1px; background: Palette.foreground.with-alpha(0.25); }
+                        FilaLinea { l: root.c-linea-total; fuerte: true; }
+                    }
+                    if root.c-vista == 1: VerticalLayout {
+                        alignment: start;
+                        FilaRamo { r: { concepto: "Concepto", patronal: "Patronal", obrero: "Obrero", total: "Total" }; fuerte: true; }
+                        Rectangle { height: 1px; background: Palette.foreground.with-alpha(0.25); }
+                        for ramo in root.c-ramos: FilaRamo { r: ramo; }
+                    }
+                    if root.c-vista == 2: Resultado {
+                        text: root.calculo-texto;
+                    }
+                }
+            }
+
+            // ---------------- Importar y exportar TXT
+            if root.seccion == 7: VerticalBox {
+                Text {
+                    text: "Importar y exportar";
+                    font-size: 20px;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ComboBox {
+                        min-width: 330px;
+                        model: root.txt-clases;
+                        current-index <=> root.txt-clase;
+                    }
+                    Button { icon: @image-url("../recursos/iconos/import.svg"); colorize-icon: true; text: "Importar TXT…"; primary: true; enabled: root.puede-capturar; clicked => { root.txt-importar(); } }
+                    Button { icon: @image-url("../recursos/iconos/upload.svg"); colorize-icon: true; text: "Exportar TXT"; enabled: root.puede-exportar; clicked => { root.txt-exportar(); } }
+                    Button { icon: @image-url("../recursos/iconos/folder-open.svg"); colorize-icon: true; text: "Abrir la carpeta de exportación"; clicked => { root.txt-abrir-carpeta(); } }
+                }
+                if root.txt-mensaje != "": Aviso { text: root.txt-mensaje; estado: root.estado-txt; }
+                Text {
+                    text: "Se importa en este orden: patrones, trabajadores, movimientos, créditos, datos afiliatorios e incapacidades. Antes de importar se hace un respaldo; los renglones que no pasan la validación se rechazan sin detener a los demás. Se exporta lo del patrón activo.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                Resultado {
+                    text: root.txt-texto;
+                }
+            }
+
+            // ---------------- Ayuda
+            if root.seccion == 8: VerticalBox {
+                Text {
+                    text: "Ayuda";
+                    font-size: 20px;
+                }
+                ScrollView {
+                    // Solo para capturas (SUA_ESCENA=ayuda:fin): abre la pantalla desplazada al final.
+                    content-y: root.ayuda-al-final ? min(0px, self.visible-height - self.content-height) : 0px;
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 6px;
+                        padding-right: 20px;
+                        Seccion { text: "Orden de trabajo"; }
+                        Text { text: "1. Patrones: registre el patrón y su prima de riesgos de trabajo, con el mes desde el que rige."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "2. Trabajadores: capture a cada trabajador, o impórtelos en Importar y exportar."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "3. Movimientos: registre lo que pasó en el mes: altas, bajas, cambios de salario, ausentismos, incapacidades y créditos INFONAVIT."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "4. Cálculo: escriba el periodo y calcule todo el patrón. Revise los avisos antes de dar el total por bueno."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "5. Guarde el cálculo y saque la cédula en PDF. La cédula es un documento de trabajo, no un comprobante de pago."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "6. Sistema: haga un respaldo al terminar."; wrap: word-wrap; font-size: 14px; }
+                        Seccion { text: "Términos"; }
+                        Text { text: "Periodo: el mes que se calcula, escrito como año y mes (202602 es febrero de 2026). En los meses pares se suma el bimestre: retiro, cesantía y vejez, e INFONAVIT."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "SDI: salario diario integrado. Es la base sobre la que se calculan las cuotas."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Prima de RT: porcentaje de riesgos de trabajo del patrón. Se revisa cada año y rige de marzo a febrero."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Tramo: días seguidos con el mismo salario dentro del periodo. El cálculo se hace tramo por tramo y los suma."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "RCV: retiro, cesantía en edad avanzada y vejez. Se paga cada bimestre."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "INFONAVIT patronal: aportación del 5 % que paga el patrón. Amortización: lo que se descuenta al trabajador que tiene crédito."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Ausentismo e incapacidad: días que no se cotizan igual. En ausentismo solo se paga enfermedades y maternidad; en incapacidad, solo retiro e INFONAVIT patronal."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Pago extemporáneo: el que se hace después del vencimiento, que es el día 17 del mes siguiente o el siguiente día hábil. Lleva actualización y recargos."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "INPC y recargos: los valores de cada mes se capturan en Catálogos, eligiendo INPC. Hacen falta para calcular un pago extemporáneo."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "UMA y UMI: unidades que fija el gobierno cada año. La UMA es la base de la cuota fija; la UMI se usa en los créditos INFONAVIT con factor de descuento."; wrap: word-wrap; font-size: 14px; }
+                        Seccion { text: "Dos formas de traer datos"; }
+                        Text { text: "Archivo de pago: abre un archivo .SUA ya generado por el SUA oficial, lo verifica, lo compara con el cálculo propio y puede importar su patrón, trabajadores y movimientos."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Importar y exportar: lee y escribe los archivos de texto del SUA (trabajadores, movimientos, créditos y otros), renglón por renglón."; wrap: word-wrap; font-size: 14px; }
+                        Seccion { text: "Acerca de"; }
+                        Text { text: root.acerca-version; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Este programa no es del IMSS ni del INFONAVIT y no sustituye al SUA oficial: no genera el archivo de pago ni la línea de captura. Sus cálculos y cédulas son documentos de trabajo; revíselos antes de usarlos."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Los datos se guardan sin cifrar en la carpeta del programa. Si lo lleva en una memoria USB, cuídela como cuidaría los expedientes en papel."; wrap: word-wrap; font-size: 14px; }
+                        Text { text: "Iconos de Lucide (licencia ISC). Base de datos SQLite (dominio público). Las licencias de todos los componentes están en el archivo LICENCIAS-DE-TERCEROS.txt que acompaña al programa."; wrap: word-wrap; font-size: 14px; }
+                        HorizontalLayout {
+                            alignment: start;
+                            // Atribución que pide la licencia gratuita de Slint, la biblioteca de la interfaz.
+                            AboutSlint { width: 220px; height: 96px; }
+                        }
+                        Seccion { text: "Teclado"; }
+                        Text { text: "Ctrl+1 a Ctrl+9 cambian de pantalla, en el orden del menú. Ctrl+S guarda o registra. Ctrl+N limpia el formulario para un registro nuevo. Enter dentro de un campo hace lo mismo que el botón principal."; wrap: word-wrap; font-size: 14px; }
+                    }
+                }
+            }
+
+            // ---------------- Sistema
+            if root.seccion == 4: VerticalBox {
+                Text {
+                    text: "Sistema";
+                    font-size: 20px;
+                }
+                ScrollView {
+                // Solo para capturas (SUA_ESCENA=sistema:fin): abre la pantalla desplazada al final.
+                content-y: root.sistema-al-final ? min(0px, self.visible-height - self.content-height) : 0px;
+                VerticalLayout {
+                alignment: start;
+                spacing: 8px;
+                padding-right: 20px;
+                Text {
+                    text: root.sistema-texto;
+                    font-family: "Consolas";
+                    font-size: 14px;
+                    wrap: word-wrap;
+                }
+                if root.sistema-aviso-carpeta != "": Aviso { text: root.sistema-aviso-carpeta; estado: 2; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { icon: @image-url("../recursos/iconos/database-backup.svg"); colorize-icon: true; text: "Respaldar ahora"; primary: true; enabled: root.puede-respaldar; clicked => { root.sistema-respaldar(); } }
+                    Button { icon: @image-url("../recursos/iconos/shrink.svg"); colorize-icon: true; text: "Compactar base"; enabled: root.puede-administrar; clicked => { root.sistema-compactar(); } }
+                }
+                if root.sistema-mensaje != "": Aviso { text: root.sistema-mensaje; estado: root.estado-sistema; }
+                Text {
+                    text: "Compactar reorganiza el archivo de la base para que ocupe menos espacio. No cambia ningún dato.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: "Restaurar un respaldo";
+                    font-size: 16px;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    ComboBox {
+                        min-width: 430px;
+                        model: root.sistema-respaldos;
+                        current-index <=> root.sistema-respaldo;
+                    }
+                    if root.sistema-pide-clave-respaldo: LineEdit {
+                        min-width: 230px;
+                        input-type: InputType.password;
+                        text <=> root.sistema-clave-respaldo;
+                        placeholder-text: "Contraseña de ese respaldo";
+                        accessible-label: "Contraseña de ese respaldo";
+                    }
+                    Button { icon: @image-url("../recursos/iconos/archive-restore.svg"); colorize-icon: true; text: "Restaurar el elegido…"; enabled: root.puede-administrar && (root.sistema-respaldo >= 0); clicked => { root.sistema-restaurar(); } }
+                }
+                Text {
+                    text: "Restaurar sustituye toda la información actual por la del respaldo. Antes se guarda una copia de la base actual, que queda en esta misma lista.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: "Contraseña de la base";
+                    font-size: 16px;
+                }
+                Text {
+                    text: root.sistema-cifrada ? "La base está cifrada: se pide la contraseña al abrir el programa. Los respaldos nuevos salen cifrados con la misma contraseña." : "La base no tiene contraseña: quien tenga el archivo puede leer los datos. Con contraseña, el archivo se cifra y se pide al abrir el programa.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    if root.sistema-cifrada: LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.sistema-clave-actual;
+                        placeholder-text: "Contraseña actual";
+                        accessible-label: "Contraseña actual";
+                    }
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.sistema-clave-nueva;
+                        placeholder-text: "Contraseña nueva";
+                        accessible-label: "Contraseña nueva";
+                    }
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.sistema-clave-repetida;
+                        placeholder-text: "Repítala";
+                        accessible-label: "Repita la contraseña nueva";
+                    }
+                    Button { text: root.sistema-cifrada ? "Cambiar…" : "Poner contraseña…"; enabled: root.puede-administrar; clicked => { root.sistema-clave-aplicar(false); } }
+                    if root.sistema-cifrada: Button { text: "Quitar…"; enabled: root.puede-administrar; clicked => { root.sistema-clave-aplicar(true); } }
+                }
+                if root.sistema-mensaje-clave != "": Aviso { text: root.sistema-mensaje-clave; estado: 3; }
+                Text {
+                    text: "Si olvida la contraseña, los datos no se pueden recuperar: no hay forma de restablecerla. Para aplicar el cambio el programa se cierra y vuelve a abrir.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                if root.sistema-aviso-respaldos != "": Aviso { text: root.sistema-aviso-respaldos; estado: 2; }
+                if root.sistema-aviso-respaldos != "": HorizontalLayout {
+                    alignment: start;
+                    Button { icon: @image-url("../recursos/iconos/trash-2.svg"); colorize-icon: true; text: "Eliminar los respaldos sin cifrar…"; enabled: root.puede-administrar; clicked => { root.sistema-borrar-sin-cifrar(); } }
+                }
+                Text {
+                    text: "Usuarios";
+                    font-size: 16px;
+                }
+                Text {
+                    text: !root.sistema-hay-usuarios ? "No hay usuarios: el programa abre sin pedir ninguno. Si crea un administrador, desde ese momento se pedirá usuario y contraseña al abrir, y cada cambio quedará anotado con su autor." : root.puede-administrar ? "Administrador: todo. Capturista: captura, importa, calcula, exporta y respalda. Consulta: ve, calcula y saca reportes, sin cambiar nada. Un usuario no se borra: se desactiva." : "Solo un administrador puede ver y cambiar los usuarios.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                if root.sistema-hay-usuarios && root.puede-administrar: HorizontalLayout {
+                    alignment: start;
+                    ComboBox {
+                        min-width: 430px;
+                        model: root.sistema-usuarios;
+                        current-index <=> root.sistema-usuario-indice;
+                        accessible-label: "Usuario a modificar";
+                        selected => { root.sistema-usuario-elegido(self.current-index); }
+                    }
+                }
+                if root.puede-administrar: HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    LineEdit {
+                        width: 150px;
+                        text <=> root.u-nombre;
+                        enabled: root.sistema-usuario-indice <= 0;
+                        placeholder-text: "Usuario";
+                        accessible-label: "Nombre de usuario";
+                    }
+                    LineEdit {
+                        width: 230px;
+                        text <=> root.u-completo;
+                        placeholder-text: "Nombre completo (opcional)";
+                        accessible-label: "Nombre completo";
+                    }
+                    ComboBox {
+                        width: 170px;
+                        model: ["Administrador", "Capturista", "Consulta"];
+                        current-index <=> root.u-rol;
+                        enabled: root.sistema-hay-usuarios;
+                        accessible-label: "Rol";
+                    }
+                    if root.sistema-usuario-indice > 0: CheckBox {
+                        text: "Activo";
+                        checked <=> root.u-activo;
+                    }
+                }
+                if root.puede-administrar: HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.u-clave;
+                        placeholder-text: root.sistema-usuario-indice > 0 ? "Contraseña nueva (opcional)" : "Contraseña";
+                        accessible-label: "Contraseña del usuario";
+                    }
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.u-repetida;
+                        placeholder-text: "Repítala";
+                        accessible-label: "Repita la contraseña del usuario";
+                    }
+                    Button { icon: @image-url("../recursos/iconos/user-plus.svg"); colorize-icon: true; text: !root.sistema-hay-usuarios ? "Crear el primer administrador…" : root.sistema-usuario-indice > 0 ? "Guardar cambios" : "Crear usuario"; clicked => { root.sistema-usuario-guardar(); } }
+                }
+                if root.sistema-mensaje-usuarios != "": Aviso { text: root.sistema-mensaje-usuarios; estado: root.estado-usuarios; }
+                if root.sistema-hay-usuarios: Text {
+                    text: "Mi contraseña";
+                    font-size: 16px;
+                }
+                if root.sistema-hay-usuarios: HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.mi-clave-actual;
+                        placeholder-text: "Mi contraseña actual";
+                        accessible-label: "Mi contraseña actual";
+                    }
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.mi-clave-nueva;
+                        placeholder-text: "Nueva";
+                        accessible-label: "Mi contraseña nueva";
+                    }
+                    LineEdit {
+                        width: 190px;
+                        input-type: InputType.password;
+                        text <=> root.mi-clave-repetida;
+                        placeholder-text: "Repítala";
+                        accessible-label: "Repita mi contraseña nueva";
+                    }
+                    Button { text: "Cambiar mi contraseña"; clicked => { root.sistema-mi-clave(); } }
+                }
+                if root.sistema-mensaje-mi-clave != "": Aviso { text: root.sistema-mensaje-mi-clave; estado: root.estado-mi-clave; }
+                if root.sistema-hay-usuarios: Text {
+                    text: "Si un administrador olvida su contraseña, se restablece desde la línea de comandos: sua-cli restablecer-usuario <nombre>. Los usuarios dicen quién hizo qué; lo que impide leer el archivo de la base con otro programa es la contraseña de la base.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                if root.sistema-hay-usuarios && root.puede-administrar: Text {
+                    text: "Bitácora de accesos";
+                    font-size: 16px;
+                }
+                if root.sistema-hay-usuarios && root.puede-administrar: TextEdit {
+                    height: 260px;
+                    font-size: 13px;
+                    read-only: true;
+                    wrap: no-wrap;
+                    text: root.sistema-bitacora;
+                    accessible-label: "Bitácora de accesos";
+                }
+                if root.sistema-hay-usuarios && root.puede-administrar: Text {
+                    text: "Los 200 movimientos más recientes, del más nuevo al más antiguo, en hora local. Se puede seleccionar y copiar.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                }
+                }
+            }
+            }
+        }
+
+        Rectangle {
+            height: 26px;
+            background: #00000033;
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 10px;
+                spacing: 12px;
+                // Si no cabe todo, se recorta la ruta, no los atajos.
+                Text {
+                    text: root.pie;
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                    min-width: 0px;
+                }
+                Text {
+                    text: (root.seccion == 0 || root.seccion == 1 ? "Ctrl+S o Enter guarda   ·   Ctrl+N nuevo   ·   " : root.seccion == 6 ? "Ctrl+S o Enter registra   ·   " : root.seccion == 5 ? "Enter calcula   ·   Ctrl+S guarda el cálculo   ·   " : "") + "Ctrl+1 a 9 cambia de pantalla";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    horizontal-stretch: 0;
+                }
+            }
+        }
+    }
+    }
+}

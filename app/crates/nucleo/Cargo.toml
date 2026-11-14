@@ -1,0 +1,15 @@
+[package]
+name = "sua-nucleo"
+version.workspace = true
+edition.workspace = true
+description = "Núcleo de OpenSUA: configuración, datos, dominio y formatos. Sin interfaz gráfica."
+
+[dependencies]
+rusqlite.workspace = true
+csv.workspace = true
+argon2.workspace = true
+password-hash.workspace = true
+serde.workspace = true
+toml.workspace = true
+rust_decimal.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,18 @@
+# Carpeta del SUA original y muestras reales: binarios del IMSS y archivos
+# con datos personales (nombres, NSS, CURP, RFC, salarios). No versionar.
+SUA/
+
+# Compilación y artefactos generados
+target/
+dist/
+__pycache__/
+*.pyc
+
+# Bases de datos, bloqueos y bitácoras locales
+*.db
+*.lock
+!Cargo.lock
+logs/
+
+# Notas de sesión internas (rutas del equipo de desarrollo)
+handoff-*.md

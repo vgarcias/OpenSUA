@@ -1,0 +1,112 @@
+name: Publicar versión
+
+# Se dispara al subir una etiqueta de versión:  git tag v0.2.0 && git push origin v0.2.0
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: 'Etiqueta existente a publicar (por ejemplo v0.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
+
+jobs:
+  compilar:
+    name: ${{ matrix.nombre }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nombre: Windows x64
+            os: windows-latest
+            destino: x86_64-pc-windows-msvc
+          - nombre: Linux x64
+            os: ubuntu-22.04
+            destino: x86_64-unknown-linux-gnu
+          - nombre: macOS Apple Silicon
+            os: macos-latest
+            destino: aarch64-apple-darwin
+          - nombre: macOS Intel
+            os: macos-latest
+            destino: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ETIQUETA }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.destino }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+          key: ${{ matrix.destino }}
+
+      # ---------- Windows: el mismo empaquetador que en el equipo de desarrollo ----------
+      - name: Herramientas de Windows (pandoc, WiX)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install pandoc -y --no-progress
+          echo "C:\Program Files\Pandoc" >> $env:GITHUB_PATH
+          dotnet tool install wix --version 5.0.2 --tool-path app\target\herramientas\wix
+      - name: Empaquetar (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\herramientas\empaquetar.ps1
+      - name: Renombrar sumas (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Move-Item app\dist\paquete\SHA256SUMS.txt app\dist\paquete\SHA256SUMS-${{ matrix.destino }}.txt
+
+      # ---------- Linux ----------
+      - name: Herramientas de Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libfreetype6-dev libxkbcommon-dev
+          curl -sSL -o /tmp/pandoc.deb https://github.com/jgm/pandoc/releases/download/3.5/pandoc-3.5-1-amd64.deb
+          sudo dpkg -i /tmp/pandoc.deb
+
+      # ---------- macOS ----------
+      - name: Herramientas de macOS
+        if: runner.os == 'macOS'
+        run: brew install pandoc
+
+      - name: Empaquetar (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: bash herramientas/empaquetar.sh ${{ matrix.destino }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paquete-${{ matrix.destino }}
+          path: |
+            app/dist/paquete/*.zip
+            app/dist/paquete/*.msi
+            app/dist/paquete/*.tar.gz
+            app/dist/paquete/*.dmg
+            app/dist/paquete/SHA256SUMS-*.txt
+          if-no-files-found: error
+
+  publicar:
+    needs: compilar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquetes
+          merge-multiple: true
+      - name: Unir sumas SHA-256
+        run: cat paquetes/SHA256SUMS-*.txt > paquetes/SHA256SUMS.txt && rm paquetes/SHA256SUMS-*.txt && cat paquetes/SHA256SUMS.txt
+      - name: Crear la versión en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$ETIQUETA" paquetes/* --repo "$GITHUB_REPOSITORY" --title "OpenSUA $ETIQUETA" --generate-notes \
+            || gh release upload "$ETIQUETA" paquetes/* --repo "$GITHUB_REPOSITORY" --clobber

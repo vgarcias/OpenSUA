@@ -1,0 +1,4 @@
+# Enlaza el runtime de C de forma estática: el .exe no debe pedir VCRUNTIME140.dll
+# en un Windows limpio (ESPECIFICACION_SUA.md, sección 13.3).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -1,0 +1,6 @@
+# Archivos de pago del IMSS: formato de ancho fijo, se guardan byte por byte.
+*.SUA binary
+*.sua binary
+*.Sua binary
+# Guiones de shell siempre con LF (se ejecutan en macOS/Linux).
+*.sh text eol=lf

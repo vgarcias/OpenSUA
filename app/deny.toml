@@ -1,0 +1,15 @@
+# Revisión de dependencias: `cargo deny check advisories` (necesita red para
+# bajar la base de avisos de RustSec). Solo se mira lo que entra en el
+# ejecutable de Windows; las dependencias de Linux, macOS, Android y web que
+# arrastran Slint y rfd no se compilan aquí.
+[graph]
+targets = ["x86_64-pc-windows-msvc"]
+
+[advisories]
+
+
+# pin-utils (RUSTSEC-2026-0441): sin mantenimiento, no es una vulnerabilidad.
+# Llega por Slint; no hay versión que lo sustituya. Revisar al actualizar Slint.
+[[advisories.ignore]]
+id = "RUSTSEC-2026-0441"
+reason = "Sin mantenimiento, sin vulnerabilidad; dependencia transitiva de Slint."

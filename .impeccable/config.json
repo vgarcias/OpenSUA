@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "aphoristic-cadence",
+        "value": "*",
+        "files": [
+          "D:/otros/sua/Revision_Manual_SUA.html"
+        ],
+        "createdAt": "2026-11-12T03:28:30.002Z",
+        "reason": "model decided: technical reference doc with terse factual notes (e.g. 'No se intentó obtenerla.'), not marketing copy"
+      }
+    ]
+  }
+}

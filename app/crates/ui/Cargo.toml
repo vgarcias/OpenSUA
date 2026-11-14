@@ -1,0 +1,24 @@
+[package]
+name = "sua"
+version.workspace = true
+edition.workspace = true
+description = "OpenSUA: interfaz gráfica (Slint, render por software)."
+build = "build.rs"
+
+[[bin]]
+name = "sua"
+path = "src/main.rs"
+
+[dependencies]
+sua-nucleo = { path = "../nucleo" }
+# Solo el render por software: no usa GPU ni controlador gráfico
+# (ESPECIFICACION_SUA.md, sección 3.2; medición en prototipo-slint/README.md).
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software"] }
+rfd = "0.15"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+slint-build = "1.18"
+winresource = "0.1"
