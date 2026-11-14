@@ -316,7 +316,9 @@ mod pruebas {
 
     #[test]
     fn se_reconoce_una_carpeta_sincronizada() {
-        let sin = |r: &str| servicio_en(Path::new(r), &[]);
+        // Las rutas de la prueba usan `\`; fuera de Windows el separador es `/`.
+        let p = |r: &str| PathBuf::from(if cfg!(windows) { r.to_string() } else { r.replace('\\', "/") });
+        let sin = |r: &str| servicio_en(&p(r), &[]);
         assert_eq!(sin(r"C:\Users\ana\OneDrive\Escritorio\OpenSUA-Portable"), Some("OneDrive"));
         assert_eq!(sin(r"C:\Users\ana\OneDrive - Empresa SA\SUA"), Some("OneDrive"));
         assert_eq!(sin(r"D:\Dropbox\OpenSUA-Portable"), Some("Dropbox"));
@@ -329,9 +331,9 @@ mod pruebas {
         assert_eq!(sin(r"C:\Respaldo de OneDrive viejo\SUA"), None);
         assert_eq!(sin(r"C:\Dropbox2\SUA"), None);
         // Una carpeta de OneDrive con otro nombre se reconoce por la variable del sistema.
-        let raices = [PathBuf::from(r"D:\Nube")];
-        assert_eq!(servicio_en(Path::new(r"d:\nube\OpenSUA-Portable"), &raices), Some("OneDrive"));
-        assert_eq!(servicio_en(Path::new(r"D:\Nubes\OpenSUA-Portable"), &raices), None);
+        let raices = [p(r"D:\Nube")];
+        assert_eq!(servicio_en(&p(r"d:\nube\OpenSUA-Portable"), &raices), Some("OneDrive"));
+        assert_eq!(servicio_en(&p(r"D:\Nubes\OpenSUA-Portable"), &raices), None);
         assert_eq!(servicio_en(Path::new(r"D:\Otra\SUA"), &raices), None);
     }
 

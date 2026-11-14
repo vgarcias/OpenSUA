@@ -6,13 +6,14 @@
 # bibliotecas que solo se usan al compilar (no viajan en el .exe): sobra, no falta.
 import json
 import os
+import shutil
 import subprocess
 import sys
 
 app, salida = sys.argv[1], sys.argv[2]
 # Tercer argumento opcional: la plataforma de destino (por omisión, Windows).
 plataforma = sys.argv[3] if len(sys.argv) > 3 else "x86_64-pc-windows-msvc"
-cargo = os.path.join(os.environ.get("CARGO_HOME", os.path.join(os.path.expanduser("~"), ".cargo")), "bin", "cargo")
+cargo = shutil.which("cargo") or os.path.join(os.environ.get("CARGO_HOME", os.path.join(os.path.expanduser("~"), ".cargo")), "bin", "cargo")
 meta = json.loads(subprocess.run(
     [cargo, "metadata", "--format-version", "1", "--filter-platform", plataforma, "--locked"],
     cwd=app, capture_output=True, text=True, encoding="utf-8", check=True).stdout)
